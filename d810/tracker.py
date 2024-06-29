@@ -5,6 +5,8 @@ from ida_hexrays import *
 
 from d810.emulator import MicroCodeEnvironment, MicroCodeInterpreter
 from d810.cfg_utils import change_1way_block_successor, change_2way_block_conditional_successor, duplicate_block
+#import idaapi
+#idaapi.require('d810.hexrays_hooks', package='InstructionDefUseCollector')
 from d810.hexrays_hooks import InstructionDefUseCollector
 from d810.hexrays_helpers import equal_mops_ignore_size, get_mop_index, get_blk_index
 from d810.hexrays_formatters import format_minsn_t, format_mop_t
@@ -172,7 +174,7 @@ cur_mop_tracker_nb_path = 0
 
 
 class MopTracker(object):
-    def __init__(self, searched_mop_list: List[mop_t], max_nb_block=-1, max_path=-1):
+    def __init__(self, searched_mop_list: List[mop_t], max_nb_block=-1, max_path=-1, dispatcher_info=None):
         self.mba = None
         self._unresolved_mops = []
         self._memory_unresolved_mops = []
@@ -186,6 +188,7 @@ class MopTracker(object):
         self.avoid_list = []
         self.call_detected = False
         self.constant_mops = []
+        self.dispatcher_info = dispatcher_info
 
     @staticmethod
     def reset():
@@ -238,6 +241,14 @@ class MopTracker(object):
         if stop_at_first_duplication:
             self.history.unresolved_mop_list = [x for x in self._unresolved_mops]
             return [self.history]
+        #'''
+        if self.dispatcher_info and blk_with_multiple_pred.serial == self.dispatcher_info.outmost_dispatch_num:
+            logger.debug(f"MopTracker unresolved: reached to the dispatcher {blk_with_multiple_pred.serial}")
+            if self.dispatcher_info.last_num_in_first_blks > 0:
+                logger.debug(f"Tracking again from the last block {self.dispatcher_info.last_num_in_first_blks} in first blocks before the dispatcher")
+                new_tracker = self.get_copy()
+                return new_tracker.search_backward(self.mba.get_mblock(self.dispatcher_info.last_num_in_first_blks), None, self.avoid_list, must_use_pred)
+        #'''
         logger.debug("MopTracker creating child because multiple pred: {0}".format(self.history.block_serial_path))
         possible_histories = []
         if must_use_pred is not None and must_use_pred.serial in blk_with_multiple_pred.predset:

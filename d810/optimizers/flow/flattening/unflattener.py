@@ -3,6 +3,11 @@ from typing import Tuple, List
 from ida_hexrays import *
 
 from d810.hexrays_helpers import extract_num_mop, append_mop_if_not_in_list
+import idaapi
+#idaapi.require('d810.optimizers.flow.flattening.generic', package='GenericDispatcherCollector')
+#idaapi.require('d810.optimizers.flow.flattening.generic', package='GenericDispatcherInfo')
+#idaapi.require('d810.optimizers.flow.flattening.generic', package='GenericDispatcherBlockInfo')
+#idaapi.require('d810.optimizers.flow.flattening.generic', package='GenericDispatcherUnflatteningRule')
 from d810.optimizers.flow.flattening.generic import GenericDispatcherCollector, GenericDispatcherInfo, \
     GenericDispatcherBlockInfo, GenericDispatcherUnflatteningRule
 
@@ -10,18 +15,100 @@ from d810.optimizers.flow.flattening.generic import GenericDispatcherCollector, 
 unflat_logger = logging.getLogger('D810.unflat')
 FLATTENING_JUMP_OPCODES = [m_jnz, m_jz, m_jae, m_jb, m_ja, m_jbe, m_jg, m_jge, m_jl, m_jle]
 
+MIN_NUM_COMPARISONS = 4
 
 class OllvmDispatcherBlockInfo(GenericDispatcherBlockInfo):
     pass
 
 
 class OllvmDispatcherInfo(GenericDispatcherInfo):
-    def explore(self, blk: mblock_t) -> bool:
+    #def __init__(self, mba: mbl_array_t):
+    #    super().__init__(mba)
+    #'''
+    def get_last_blk_in_first_blks(self) -> int: # to track variables in the first blocks
+        lif = -1
+
+        '''# version 1
+        if self.outmost_dispatch_num > 0:
+            dispatch_mb = self.mba.get_mblock(self.outmost_dispatch_num)
+
+            for blk_pred_serial in dispatch_mb.predset:
+                serial = blk_pred_serial
+                while serial != self.outmost_dispatch_num and serial != 1:
+                    mb = self.mba.get_mblock(serial)
+                    if mb.npred():
+                        serial = mb.pred(0) # lazy tracking -> infinite loop :-(
+                    else:
+                        break
+
+                if serial == 1: # reached to the start block
+                    unflat_logger.debug(f'mblock {blk_pred_serial} is the last block in first ones before the outmost dispatcher')
+                    lif = blk_pred_serial
+        '''
+
+        # version 2 (ported from HexRaysDeob APT10 ANEL version)
+        dispatch = self.outmost_dispatch_num
+        if dispatch != -1:
+            lif = self.mba.get_mblock(dispatch).pred(0)
+            mb_lif = self.mba.get_mblock(lif)
+            if lif >= dispatch or not mb_lif.tail or is_mcode_jcond(mb_lif.tail.opcode):
+                min_num = dispatch
+                for curr in self.mba.get_mblock(dispatch).predset:
+                    mb_curr = self.mba.get_mblock(curr)
+                    if curr < min_num and mb_curr.tail and not is_mcode_jcond(mb_curr.tail.opcode):
+                        min_num = curr
+                lif = min_num
+
+        if lif != -1 and lif != dispatch:
+            unflat_logger.debug(f'mblock {lif} is likely the last block in first ones before the outmost dispatcher')
+            return lif
+        else:
+            return -1
+
+    def guess_outmost_dispatcher_blk(self) -> int: # just return a mblock with the biggest npred
+        dispatch = -1
+        npred_max = MIN_NUM_COMPARISONS
+
+        mb = self.mba.get_mblock(0)
+        while mb.nextb:
+            if npred_max < mb.npred() and mb.tail and mb.tail.opcode in FLATTENING_JUMP_OPCODES:
+                if mb.tail.r.t != mop_n:
+                    continue
+                if mb.tail.l.t == mop_r or (mb.tail.l.t == mop_d and mb.tail.l.d.opcode == m_and):
+                    npred_max = mb.npred()
+                    dispatch = mb.serial
+            mb = mb.nextb
+
+        #if dispatch != -1:
+        #    unflat_logger.debug(f'mblock {dispatch} is likely a CFF dispatcher based on the biggest npred value')
+
+        return dispatch
+    #'''
+    def get_entropy(self, cmp_val_size, dispatch) -> float:
+        # Count the number of 1-bits in the constant values used for comparison
+        num_bits = 0
+        num_ones = 0
+        for cmp_value in self.comparison_values:
+            num_bits += cmp_val_size * 8
+            for i in range(cmp_val_size * 8):
+                if cmp_value & (1 << i):
+                    num_ones += 1
+
+        # Compute the percentage of 1-bits. Given that these constants seem to be
+        # created pseudorandomly, the percentage should be roughly 1/2.
+        entropy = 0.0 if num_bits == 0 else num_ones / float(num_bits)
+        unflat_logger.debug(f'dispatcher {dispatch} contains block comparison values ({self.comparison_values}) whose entropy value is {entropy}')
+
+        return entropy
+
+    def explore(self, blk: mblock_t) -> bool: # Detect dispatcher entry blocks
+        unflat_logger.debug(f'mblock {blk.serial}: exploring dispatcher (guessed outmost dispatcher {self.outmost_dispatch_num})')
         self.reset()
-        if not self._is_candidate_for_dispatcher_entry_block(blk):
+        #if not self._is_candidate_for_dispatcher_entry_block(blk):
+        if not self._is_candidate_for_dispatcher_entry_block(blk) and blk.serial != self.outmost_dispatch_num:
             return False
         self.entry_block = OllvmDispatcherBlockInfo(blk)
-        self.entry_block.parse()
+        self.entry_block.parse(o_dispatch=self.outmost_dispatch_num, first=self.last_num_in_first_blks)
         for used_mop in self.entry_block.use_list:
             append_mop_if_not_in_list(used_mop, self.entry_block.assume_def_list)
         self.dispatcher_internal_blocks.append(self.entry_block)
@@ -30,8 +117,12 @@ class OllvmDispatcherInfo(GenericDispatcherInfo):
         self._explore_children(self.entry_block)
         dispatcher_blk_with_external_father = self._get_dispatcher_blocks_with_external_father()
         # TODO: I think this can be wrong because we are too permissive in detection of dispatcher blocks
-        if len(dispatcher_blk_with_external_father) != 0:
+        #if len(dispatcher_blk_with_external_father) != 0: # All internal blocks (except the entry block) should not have fathers outside the CFF loop
+        entropy = self.get_entropy(num_mop.size, blk.serial) # additional check by entropy (only effective for O-LLVM)
+        if len(dispatcher_blk_with_external_father) != 0 or (entropy < 0.3 or entropy > 0.7): # validate the comparison value's entropy
+            unflat_logger.debug(f'mblock {blk.serial} is excluded as a CFF dispatcher ({len(dispatcher_blk_with_external_father)=}, {entropy=})')
             return False
+        unflat_logger.debug(f'mblock {blk.serial} is detected as a CFF dispatcher entry block')
         return True
 
     def _is_candidate_for_dispatcher_entry_block(self, blk: mblock_t) -> bool:
@@ -39,13 +130,14 @@ class OllvmDispatcherInfo(GenericDispatcherInfo):
         num_mop, mop_compared = self._get_comparison_info(blk)
         if (num_mop is None) or (mop_compared is None):
             return False
-        # Its fathers are not conditional branch with this mop
+        # Its fathers are not conditional branch with this mop -> Sometimes they can be :-(
         for father_serial in blk.predset:
             father_blk = self.mba.get_mblock(father_serial)
             father_num_mop, father_mop_compared = self._get_comparison_info(father_blk)
             if (father_num_mop is not None) and (father_mop_compared is not None):
                 if mop_compared.equal_mops(father_mop_compared, EQ_IGNSIZE):
                     return False
+        unflat_logger.debug(f'mblock {blk.serial} is candidate for dispatcher entry block')
         return True
 
     def _get_comparison_info(self, blk: mblock_t) -> Tuple[mop_t, mop_t]:

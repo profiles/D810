@@ -8,7 +8,8 @@ from d810.hexrays_helpers import equal_ignore_msb_cst, equal_bnot_mop, AND_TABLE
 class Add_HackersDelightRule_1(PatternMatchingRule):
     PATTERN = AstNode(m_sub,
                       AstLeaf("x_0"),
-                      AstNode(m_sub,
+                      #AstNode(m_sub,
+                      AstNode(m_add, # x - (~y + 1) == x + y
                               AstNode(m_bnot,
                                       AstLeaf("x_1")),
                               AstConstant("1", 1)))
@@ -202,7 +203,7 @@ class AddXor_Rule_1(PatternMatchingRule):
                       AstNode(m_mul,
                               AstConstant("2", 2),
                               AstNode(m_or,
-                                      AstLeaf("x_0"),
+                                      AstLeaf("x_0"), 
                                       AstLeaf("bnot_x_1"))))
     REPLACEMENT_PATTERN = AstNode(m_add,
                                   AstNode(m_xor,

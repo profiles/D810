@@ -8,6 +8,8 @@ from d810.optimizers.flow.handler import FlowOptimizationRule
 
 from d810.tracker import MopTracker, MopHistory, remove_segment_registers, duplicate_histories
 from d810.emulator import MicroCodeEnvironment, MicroCodeInterpreter
+#import idaapi
+#idaapi.require('d810.hexrays_hooks', package='InstructionDefUseCollector')
 from d810.hexrays_hooks import InstructionDefUseCollector
 from d810.hexrays_helpers import extract_num_mop, get_mop_index, append_mop_if_not_in_list, CONTROL_FLOW_OPCODES, \
     CONDITIONAL_JUMP_OPCODES
@@ -66,11 +68,25 @@ class GenericDispatcherBlockInfo(object):
                 self.comparison_value = num_mop.nnn.value
                 self.compared_mop = other_mop
 
-    def parse(self):
+    def parse(self, o_dispatch=None, first=None):
+        '''
+        if o_dispatch and first and self.blk.serial == o_dispatch:
+            mba = self.blk.mba
+            limit = o_dispatch if o_dispatch < 9 else 9
+
+            unflat_logger.debug(f"Parsing first blocks ({o_dispatch=}, {first=}, {limit=})")
+            for i in range(1, limit):
+                blk = mba.get_mblock(i)
+                curins = blk.head
+                while curins is not None:
+                    self.update_with_ins(curins)
+                    curins = curins.next
+        '''
         curins = self.blk.head
         while curins is not None:
             self.update_with_ins(curins)
             curins = curins.next
+        
         for mop_def in self.def_list:
             append_mop_if_not_in_list(mop_def, self.assume_def_list)
 
@@ -111,6 +127,16 @@ class GenericDispatcherInfo(object):
         self.dispatcher_internal_blocks = []
         self.dispatcher_exit_blocks = []
 
+        # Used for o-llvm unflattening
+        self.outmost_dispatch_num = self.guess_outmost_dispatcher_blk()
+        self.last_num_in_first_blks = self.get_last_blk_in_first_blks()
+
+    def get_last_blk_in_first_blks(self) -> int:
+        return -1
+
+    def guess_outmost_dispatcher_blk(self) -> int:
+        return -1
+    
     def reset(self):
         self.mop_compared = None
         self.entry_block = None
@@ -356,22 +382,28 @@ class GenericDispatcherUnflatteningRule(GenericUnflatteningRule):
         pass
 
     def get_dispatcher_father_histories(self, dispatcher_father: mblock_t,
-                                        dispatcher_entry_block: GenericDispatcherBlockInfo) -> List[MopHistory]:
+                                        dispatcher_entry_block: GenericDispatcherBlockInfo, 
+                                        dispatcher_info: GenericDispatcherInfo) -> List[MopHistory]:
         father_tracker = MopTracker(dispatcher_entry_block.use_before_def_list,
-                                    max_nb_block=self.MOP_TRACKER_MAX_NB_BLOCK, max_path=self.MOP_TRACKER_MAX_NB_PATH)
+                                    max_nb_block=self.MOP_TRACKER_MAX_NB_BLOCK, max_path=self.MOP_TRACKER_MAX_NB_PATH, 
+                                    dispatcher_info=dispatcher_info)
         father_tracker.reset()
         self.register_initialization_variables(father_tracker)
         father_histories = father_tracker.search_backward(dispatcher_father, None)
+        unflat_logger.debug(f"Histories (dispatcher {dispatcher_entry_block.serial}, predecessor {dispatcher_father.serial}): {father_histories}")
+
         return father_histories
 
     def check_if_histories_are_resolved(self, mop_histories: List[MopHistory]) -> bool:
         return all([mop_history.is_resolved() for mop_history in mop_histories])
 
     def ensure_dispatcher_father_is_resolvable(self, dispatcher_father: mblock_t,
-                                               dispatcher_entry_block: GenericDispatcherBlockInfo) -> int:
-        father_histories = self.get_dispatcher_father_histories(dispatcher_father, dispatcher_entry_block)
+                                               dispatcher_entry_block: GenericDispatcherBlockInfo,
+                                               dispatcher_info: GenericDispatcherInfo) -> int:
+        father_histories = self.get_dispatcher_father_histories(dispatcher_father, dispatcher_entry_block, dispatcher_info)
         father_histories_cst = get_all_possibles_values(father_histories, dispatcher_entry_block.use_before_def_list,
                                                         verbose=False)
+                                                        #verbose=True)
         father_is_resolvable = self.check_if_histories_are_resolved(father_histories)
         if not father_is_resolvable:
             raise NotDuplicableFatherException("Dispatcher {0} predecessor {1} is not duplicable: {2}"
@@ -392,7 +424,7 @@ class GenericDispatcherUnflatteningRule(GenericUnflatteningRule):
 
     def resolve_dispatcher_father(self, dispatcher_father: mblock_t, dispatcher_info: GenericDispatcherInfo) -> int:
         dispatcher_father_histories = self.get_dispatcher_father_histories(dispatcher_father,
-                                                                           dispatcher_info.entry_block)
+                                                                           dispatcher_info.entry_block, dispatcher_info)
         father_is_resolvable = self.check_if_histories_are_resolved(dispatcher_father_histories)
         if not father_is_resolvable:
             raise NotResolvableFatherException("Can't fix block {0}".format(dispatcher_father.serial))
@@ -444,7 +476,7 @@ class GenericDispatcherUnflatteningRule(GenericUnflatteningRule):
             for dispatcher_father in dispatcher_father_list:
                 try:
                     total_nb_change += self.ensure_dispatcher_father_is_resolvable(dispatcher_father,
-                                                                                   dispatcher_info.entry_block)
+                                                                                   dispatcher_info.entry_block, dispatcher_info)
                 except NotDuplicableFatherException as e:
                     unflat_logger.warning(e)
                     pass
