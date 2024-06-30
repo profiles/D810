@@ -66,7 +66,7 @@ class GenericDispatcherBlockInfo(object):
                 self.comparison_value = num_mop.nnn.value
                 self.compared_mop = other_mop
 
-    def parse(self):
+    def parse(self, o_dispatch=None, first=None):
         curins = self.blk.head
         while curins is not None:
             self.update_with_ins(curins)
