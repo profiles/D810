@@ -6,8 +6,6 @@ from d810.tracker import MopTracker
 from d810.cfg_utils import change_1way_block_successor
 from d810.hexrays_formatters import format_minsn_t, dump_microcode_for_debug
 from d810.optimizers.flow.flattening.utils import get_all_possibles_values
-#import idaapi
-#idaapi.require('d810.optimizers.flow.flattening.generic', package='GenericUnflatteningRule')
 from d810.optimizers.flow.flattening.generic import GenericUnflatteningRule
 
 unflat_logger = logging.getLogger('D810.unflat')

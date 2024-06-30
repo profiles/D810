@@ -5,8 +5,6 @@ from ida_hexrays import *
 
 from d810.emulator import MicroCodeEnvironment, MicroCodeInterpreter
 from d810.cfg_utils import change_1way_block_successor, change_2way_block_conditional_successor, duplicate_block
-#import idaapi
-#idaapi.require('d810.hexrays_hooks', package='InstructionDefUseCollector')
 from d810.hexrays_hooks import InstructionDefUseCollector
 from d810.hexrays_helpers import equal_mops_ignore_size, get_mop_index, get_blk_index
 from d810.hexrays_formatters import format_minsn_t, format_mop_t

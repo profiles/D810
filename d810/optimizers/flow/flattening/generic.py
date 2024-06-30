@@ -8,8 +8,6 @@ from d810.optimizers.flow.handler import FlowOptimizationRule
 
 from d810.tracker import MopTracker, MopHistory, remove_segment_registers, duplicate_histories
 from d810.emulator import MicroCodeEnvironment, MicroCodeInterpreter
-#import idaapi
-#idaapi.require('d810.hexrays_hooks', package='InstructionDefUseCollector')
 from d810.hexrays_hooks import InstructionDefUseCollector
 from d810.hexrays_helpers import extract_num_mop, get_mop_index, append_mop_if_not_in_list, CONTROL_FLOW_OPCODES, \
     CONDITIONAL_JUMP_OPCODES

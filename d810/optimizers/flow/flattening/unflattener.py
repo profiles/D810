@@ -3,11 +3,6 @@ from typing import Tuple, List
 from ida_hexrays import *
 
 from d810.hexrays_helpers import extract_num_mop, append_mop_if_not_in_list
-import idaapi
-#idaapi.require('d810.optimizers.flow.flattening.generic', package='GenericDispatcherCollector')
-#idaapi.require('d810.optimizers.flow.flattening.generic', package='GenericDispatcherInfo')
-#idaapi.require('d810.optimizers.flow.flattening.generic', package='GenericDispatcherBlockInfo')
-#idaapi.require('d810.optimizers.flow.flattening.generic', package='GenericDispatcherUnflatteningRule')
 from d810.optimizers.flow.flattening.generic import GenericDispatcherCollector, GenericDispatcherInfo, \
     GenericDispatcherBlockInfo, GenericDispatcherUnflatteningRule
 

@@ -7,8 +7,6 @@ from d810.cfg_utils import duplicate_block, make_2way_block_goto, update_blk_suc
 
 from d810.hexrays_formatters import format_minsn_t, dump_microcode_for_debug
 from d810.optimizers.flow.flattening.utils import get_all_possibles_values
-#import idaapi
-#idaapi.require('d810.optimizers.flow.flattening.generic', package='GenericUnflatteningRule')
 from d810.optimizers.flow.flattening.generic import GenericUnflatteningRule
 from d810.utils import unsigned_to_signed
 

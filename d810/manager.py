@@ -48,9 +48,6 @@ class D810Manager(object):
         self.stop()
         logger.debug("Reloading manager...")
 
-        #idaapi.require('d810.hexrays_hooks', package='InstructionOptimizerManager')
-        #idaapi.require('d810.hexrays_hooks', package='BlockOptimizerManager')
-        #idaapi.require('d810.hexrays_hooks', package='HexraysDecompilationHook')
         from d810.hexrays_hooks import InstructionOptimizerManager, BlockOptimizerManager, HexraysDecompilationHook
 
         self.instruction_optimizer = InstructionOptimizerManager(self)
