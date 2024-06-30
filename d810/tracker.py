@@ -241,14 +241,14 @@ class MopTracker(object):
         if stop_at_first_duplication:
             self.history.unresolved_mop_list = [x for x in self._unresolved_mops]
             return [self.history]
-        #'''
+
         if self.dispatcher_info and blk_with_multiple_pred.serial == self.dispatcher_info.outmost_dispatch_num:
             logger.debug(f"MopTracker unresolved: reached to the dispatcher {blk_with_multiple_pred.serial}")
             if self.dispatcher_info.last_num_in_first_blks > 0:
                 logger.debug(f"Tracking again from the last block {self.dispatcher_info.last_num_in_first_blks} in first blocks before the dispatcher")
                 new_tracker = self.get_copy()
                 return new_tracker.search_backward(self.mba.get_mblock(self.dispatcher_info.last_num_in_first_blks), None, self.avoid_list, must_use_pred)
-        #'''
+
         logger.debug("MopTracker creating child because multiple pred: {0}".format(self.history.block_serial_path))
         possible_histories = []
         if must_use_pred is not None and must_use_pred.serial in blk_with_multiple_pred.predset:

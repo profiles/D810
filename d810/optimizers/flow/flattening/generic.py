@@ -68,20 +68,7 @@ class GenericDispatcherBlockInfo(object):
                 self.comparison_value = num_mop.nnn.value
                 self.compared_mop = other_mop
 
-    def parse(self, o_dispatch=None, first=None):
-        '''
-        if o_dispatch and first and self.blk.serial == o_dispatch:
-            mba = self.blk.mba
-            limit = o_dispatch if o_dispatch < 9 else 9
-
-            unflat_logger.debug(f"Parsing first blocks ({o_dispatch=}, {first=}, {limit=})")
-            for i in range(1, limit):
-                blk = mba.get_mblock(i)
-                curins = blk.head
-                while curins is not None:
-                    self.update_with_ins(curins)
-                    curins = curins.next
-        '''
+    def parse(self):
         curins = self.blk.head
         while curins is not None:
             self.update_with_ins(curins)
