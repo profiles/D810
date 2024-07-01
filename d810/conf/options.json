@@ -8,7 +8,8 @@
     "default_unflattening_ollvm.json",
     "default_unflattening_switch_case.json",
     "example_anel.json",
-    "example_libobfuscated.json"
+    "example_libobfuscated.json",
+    "example_hodur.json"
   ],
   "last_project_index": 0
 }

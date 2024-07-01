@@ -52,7 +52,7 @@ class InstructionDefUseCollector(mop_visitor_t):
                     return 0
                 elif op.a.t == mop_S:
                     return 0
-                helper_logger.warning("Calling visit_mop with unsupported mop type {0} - {1}: '{2}'"
+                helper_logger.warning("op.t == mop_a: Calling visit_mop with unsupported mop type {0} - {1}: '{2}'"
                                       .format(mop_type_to_string(op.t), mop_type_to_string(op.a.t), format_mop_t(op)))
                 return 0
             elif op.t == mop_n:
@@ -63,8 +63,10 @@ class InstructionDefUseCollector(mop_visitor_t):
                 return 0
             elif op.t == mop_b:
                 return 0
+            elif op.t == mop_str:
+                return 0
             else:
-                helper_logger.warning("Calling visit_mop with unsupported mop type {0}: '{1}'"
+                helper_logger.warning("op.t == else: Calling visit_mop with unsupported mop type {0}: '{1}'"
                                       .format(mop_type_to_string(op.t), format_mop_t(op)))
         return 0
 
