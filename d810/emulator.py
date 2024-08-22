@@ -320,7 +320,7 @@ class MicroCodeInterpreter(object):
             else:
                 memory_value = get_qword(mop.g)
                 emulator_log.debug("Reading a mop_v {0:x} (non writable -> return {1:x})".format(mop.g, memory_value))
-                return mop.g
+                return memory_value
         raise EmulationException("Unsupported mop type '{0}': '{1}'"
                                  .format(mop_type_to_string(mop.t), format_mop_t(mop)))
 
