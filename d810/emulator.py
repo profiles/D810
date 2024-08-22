@@ -275,15 +275,7 @@ class MicroCodeInterpreter(object):
                 emulator_log.debug("  stack mop {0} value : {1}".format(format_mop_t(stack_mop), stack_mop_value))
                 return stack_mop_value & res_mask
             else:
-                mem_seg = getseg(load_address)
-                seg_perm = mem_seg.perm
-                if (seg_perm & SEGPERM_WRITE) != 0:
-                    raise WritableMemoryReadException("ldx {0:x} (writable -> return None)".format(load_address))
-                else:
-                    memory_value = get_qword(load_address)
-                    emulator_log.debug("ldx {0:x} (non writable -> return {1:x})"
-                                       .format(load_address, memory_value & res_mask))
-                    return memory_value & res_mask
+                return environment.lookup_addr(load_address) & res_mask
 
     def _eval_store(self, ins: minsn_t, environment: MicroCodeEnvironment) -> Union[None, int]:
         # TODO: implement
@@ -486,21 +478,24 @@ class MicroCodeEnvironment(object):
         else:
             return None
 
+    def lookup_addr(self, addr: int) -> int:
+        memory_value = get_qword(addr)
+
+        mem_seg = getseg(addr)
+        seg_perm = mem_seg.perm
+        if (seg_perm & SEGPERM_WRITE) != 0:
+            emulator_log.warning("Reading a (writable) addr {0:x} -> return {1:x}".format(addr, memory_value))
+        else:
+            emulator_log.debug("Reading a addr {0:x} (non writable -> return {1:x})".format(addr, memory_value))
+        return memory_value
+
     def lookup(self, mop: mop_t, raise_exception=True) -> int:
         if mop.t == mop_r:
             return self._lookup_mop(mop, self.mop_r_record, raise_exception=raise_exception)
         elif mop.t == mop_S:
             return self._lookup_mop(mop, self.mop_S_record, raise_exception=raise_exception)
         elif mop.t == mop_v:
-            mem_seg = getseg(mop.g)
-            seg_perm = mem_seg.perm
-            if (seg_perm & SEGPERM_WRITE) != 0:
-                emulator_log.debug("Reading a (writable) mop_v {0}".format(format_mop_t(mop)))
-                return None
-            else:
-                memory_value = get_qword(mop.g)
-                emulator_log.debug("Reading a mop_v {0:x} (non writable -> return {1:x})".format(mop.g, memory_value))
-                return memory_value
+            return self.lookup_addr(mop.g)
 
     def assign(self, mop: mop_t, value: int, auto_define=True) -> int:
         if mop.t == mop_r:
