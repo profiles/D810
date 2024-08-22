@@ -298,7 +298,7 @@ class MicroCodeInterpreter(object):
     def eval(self, mop: mop_t, environment: MicroCodeEnvironment) -> Union[None, int]:
         if mop.t == mop_n:
             return mop.nnn.value
-        elif mop.t in [mop_r, mop_S]:
+        elif mop.t in [mop_r, mop_S, mop_v]:
             return environment.lookup(mop)
         elif mop.t == mop_d:
             return self._eval_instruction(mop.d, environment)
@@ -311,16 +311,6 @@ class MicroCodeInterpreter(object):
                 return mop.a.s.off
             raise UnresolvedMopException("Calling get_cst with unsupported mop type {0} - {1}: '{2}'"
                                          .format(mop.t, mop.a.t, format_mop_t(mop)))
-        elif mop.t == mop_v:
-            mem_seg = getseg(mop.g)
-            seg_perm = mem_seg.perm
-            if (seg_perm & SEGPERM_WRITE) != 0:
-                emulator_log.debug("Reading a (writable) mop_v {0}".format(format_mop_t(mop)))
-                return environment.lookup(mop)
-            else:
-                memory_value = get_qword(mop.g)
-                emulator_log.debug("Reading a mop_v {0:x} (non writable -> return {1:x})".format(mop.g, memory_value))
-                return memory_value
         raise EmulationException("Unsupported mop type '{0}': '{1}'"
                                  .format(mop_type_to_string(mop.t), format_mop_t(mop)))
 
@@ -501,6 +491,16 @@ class MicroCodeEnvironment(object):
             return self._lookup_mop(mop, self.mop_r_record, raise_exception=raise_exception)
         elif mop.t == mop_S:
             return self._lookup_mop(mop, self.mop_S_record, raise_exception=raise_exception)
+        elif mop.t == mop_v:
+            mem_seg = getseg(mop.g)
+            seg_perm = mem_seg.perm
+            if (seg_perm & SEGPERM_WRITE) != 0:
+                emulator_log.debug("Reading a (writable) mop_v {0}".format(format_mop_t(mop)))
+                return None
+            else:
+                memory_value = get_qword(mop.g)
+                emulator_log.debug("Reading a mop_v {0:x} (non writable -> return {1:x})".format(mop.g, memory_value))
+                return memory_value
 
     def assign(self, mop: mop_t, value: int, auto_define=True) -> int:
         if mop.t == mop_r:
