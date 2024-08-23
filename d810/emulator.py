@@ -493,7 +493,7 @@ class MicroCodeEnvironment(object):
         mem_seg = getseg(addr)
         seg_perm = mem_seg.perm
         if (seg_perm & SEGPERM_WRITE) != 0:
-            if self.callback is not None:
+            if self.read_callback is not None:
                 return self.read_callback(addr)
             emulator_log.warning("Reading a (writable) addr {0:x}".format(addr))
             return None
