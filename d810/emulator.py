@@ -275,7 +275,7 @@ class MicroCodeInterpreter(object):
                 emulator_log.debug("  stack mop {0} value : {1}".format(format_mop_t(stack_mop), stack_mop_value))
                 return stack_mop_value & res_mask
             else:
-                return environment.lookup_addr(load_address) & res_mask
+                return environment.read_addr(load_address) & res_mask
 
     def _eval_store(self, ins: minsn_t, environment: MicroCodeEnvironment) -> Union[None, int]:
         # TODO: implement
@@ -415,6 +415,15 @@ class MicroCodeEnvironment(object):
         self.next_blk = None
         self.next_ins = None
 
+        self.read_callback = None
+        self.write_callback = None
+
+    def set_read_callback(self, callback):
+        self.read_callback = callback
+
+    def set_write_callback(self, callback):
+        self.write_callback = callback
+
     def items(self):
         return [x for x in self.mop_r_record.items() + self.mop_S_record.items()]
 
@@ -478,16 +487,19 @@ class MicroCodeEnvironment(object):
         else:
             return None
 
-    def lookup_addr(self, addr: int) -> int:
+    def read_addr(self, addr: int) -> int:
         memory_value = get_qword(addr)
 
         mem_seg = getseg(addr)
         seg_perm = mem_seg.perm
         if (seg_perm & SEGPERM_WRITE) != 0:
-            emulator_log.warning("Reading a (writable) addr {0:x} -> return {1:x}".format(addr, memory_value))
+            if self.callback is not None:
+                return self.read_callback(addr)
+            emulator_log.warning("Reading a (writable) addr {0:x}".format(addr))
+            return None
         else:
             emulator_log.debug("Reading a addr {0:x} (non writable -> return {1:x})".format(addr, memory_value))
-        return memory_value
+            return memory_value
 
     def lookup(self, mop: mop_t, raise_exception=True) -> int:
         if mop.t == mop_r:
@@ -495,7 +507,7 @@ class MicroCodeEnvironment(object):
         elif mop.t == mop_S:
             return self._lookup_mop(mop, self.mop_S_record, raise_exception=raise_exception)
         elif mop.t == mop_v:
-            return self.lookup_addr(mop.g)
+            return self.read_addr(mop.g)
 
     def assign(self, mop: mop_t, value: int, auto_define=True) -> int:
         if mop.t == mop_r:
