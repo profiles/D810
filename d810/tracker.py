@@ -458,8 +458,10 @@ def get_segment_register_indexes(mop_list: List[mop_t]) -> List[int]:
     for i, mop in enumerate(mop_list):
         if mop.t == mop_r:
             formatted_mop = format_mop_t(mop)
-            if formatted_mop in ["ds.2", "cs.2", "es.2", "ss.2"]:
-                segment_register_indexes.append(i)
+            for prefix in ["ds.2", "cs.2", "es.2", "ss.2"]:
+                if formatted_mop.startswith(prefix):
+                    segment_register_indexes.append(i)
+                    break
     return segment_register_indexes
 
 
