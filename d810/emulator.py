@@ -259,6 +259,11 @@ class MicroCodeInterpreter(object):
             return ror(data_1, data_2, 8 * args_list.f.args[0].size) & res_mask
         elif helper_name == "__readfsqword":
             return 0
+        elif helper_name == "atomic_load":
+            addr = self.eval(args_list.f.args[0], environment)
+            val = environment.read_addr(addr)
+            emulator_log.debug("Call helper for {0}, addr: {1}, result: {2}, size: {3}".format(helper_name, format_mop_t(args_list.f.args[0]), val, ins.d.size))
+            return val & res_mask
         return None
 
     def _eval_load(self, ins: minsn_t, environment: MicroCodeEnvironment) -> Union[None, int]:
